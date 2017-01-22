@@ -12,8 +12,7 @@ namespace SerialTerminal
         static string serPort, inputLine;
         static int serBaud, TESTMODE;
         static byte serDataBits, serParity, serStopBits;
-        static Thread readThread;
-        static Thread writeThread;
+        static Thread readThread, writeThread;
 
         static void Main(string[] args)
         {
@@ -46,44 +45,70 @@ namespace SerialTerminal
             }
 
             if (TESTMODE == 0)
-            {
-                // Set Terminal Mode
+            {   // Set Terminal Mode
                 Console.WriteLine("SerialTerminal ~ DevolutionXLimited");
+                Console.WriteLine();
                 // List Serial Ports
-                Console.WriteLine("Serial Ports:");
+                Console.WriteLine("Serial Ports");
                 SIOManager.getSerialPortList();
-                Console.WriteLine("");
+                Console.WriteLine();
                 // Set Serial Port
                 Console.Write("Enter the name of the desired serial port: ");
                 serPort = Console.ReadLine();
+                if (String.IsNullOrEmpty(serPort))
+                {
+                    Console.WriteLine("Did not set serial port!");
+                    End();
+                }
                 // Set Serial Port Baudrate
+                Console.WriteLine();
                 Console.Write("Enter the baud rate: ");
                 if (Int32.TryParse(Console.ReadLine(), out serBaud))
-                {
-                    // Set Serial Port Databits
+                {   // Set Serial Port Databits
+                    Console.WriteLine();
                     Console.Write("Enter the size of DataBits: ");
                     if (byte.TryParse(Console.ReadLine(), out serDataBits))
-                    {
-                        // Set Serial Port Parity
-                        Console.Write("Enter the Parity value. 0 = None, 1 = Even, 2 = Odd: ");
+                    {   // Set Serial Port Parity
+                        Console.WriteLine();
+                        Console.WriteLine("Enter the Parity value.");
+                        Console.Write("0 = None, 1 = Even, 2 = Odd: ");
                         if (byte.TryParse(Console.ReadLine(), out serParity))
-                        {
-                            // Set Serial Port Stopbits
-                            Console.Write("Enter the StopBits value. 0 = None, 1 = One, 2 = Two: ");
+                        {   // Set Serial Port Stopbits
+                            Console.WriteLine();
+                            Console.WriteLine("Enter the StopBits value.");
+                            Console.Write("0 = None, 1 = One, 2 = Two: ");
                             if (byte.TryParse(Console.ReadLine(), out serStopBits))
                             {
-                                Console.WriteLine("");
+                                Console.WriteLine();
                                 Console.WriteLine("Terminal Setup Completed.");
                                 Motd();
                             }
+                            else
+                            {
+                                Console.WriteLine("Did not set stopbits!");
+                                End();
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Did not set parity!");
+                            End();
                         }
                     }
+                    else
+                    {
+                        Console.WriteLine("Did not set databits!");
+                        End();
+                    }
                 }
-				
+                else
+                {
+                    Console.WriteLine("Did not set baud!");
+                    End();
+                }
+
                 SIOManager.SIOInit(serPort, serBaud, serDataBits, serParity, serStopBits, port_DataReceived);
-
                 Update();
-
             }
         }
 
@@ -94,7 +119,6 @@ namespace SerialTerminal
                 while (continueToTransmit == false)
                 {
                     inputLine = Console.ReadLine();
-                    
                     // Available Commands
                     switch (inputLine)
                     {
@@ -125,8 +149,9 @@ namespace SerialTerminal
                             Console.WriteLine("Reloading Last Serial Port in twoway mode!");
 
                             continueToTransmit = true;
-                            Threads(1);
+                            Threads();
                             Console.WriteLine("\t\tEntered TwoWay mode");
+                            Console.WriteLine();
                             break;
 
                         // Passthrough 
@@ -140,13 +165,14 @@ namespace SerialTerminal
 
         static void Motd()
         {
+            Console.WriteLine();
             Console.WriteLine("Commands: ");
-            Console.WriteLine("|   'quit'   |   'writeBytes'   |   'login'   |   'twoway'   |");
+            Console.WriteLine("|  'quit'  |  'writeBytes'  |   'login'   |   'twoway'   |");
             Console.WriteLine("    If the user does not pass a command into the terminal ");
             Console.WriteLine("    the terminal assumes pass through mode; which sends   ");
             Console.WriteLine("    any INPUT over the serial port. In addition the       ");
             Console.WriteLine("    program will return the input back to the console.    ");
-            Console.WriteLine("");
+            Console.WriteLine();
         }
 
         static void Read()
@@ -156,7 +182,8 @@ namespace SerialTerminal
                 try
                 {
                     string message = SIOManager.port.ReadLine();
-                    Console.WriteLine(message);
+                    Console.Write(message);
+                    Console.WriteLine();
                 }
                 catch
                 {
@@ -181,9 +208,8 @@ namespace SerialTerminal
                             Console.WriteLine("Closing Serial Port!");
                             SIOManager.SIOInit(serPort, serBaud, serDataBits, serParity, serStopBits, port_DataReceived);
                             Console.WriteLine("Reloading Serial Port and Returning to Primary Mode!");
-                            Threads(0);
                             Console.WriteLine("\t\tEntered Primary Mode");
-                            Console.WriteLine("");
+                            Console.WriteLine();
                             Motd();
                             break;
 
@@ -192,7 +218,7 @@ namespace SerialTerminal
                             break;
 
                         default:
-                            SIOManager.port.WriteLine(message);
+                            SIOManager.port.Write(message);
                             SIOManager.port.WriteLine("");
                             break;
                     }  
@@ -204,38 +230,26 @@ namespace SerialTerminal
             }
         }
 
-        static void Threads(int control)
-        {
-            if (control == 1)
+        static void Threads()
+        {   
+            try
             {
-                try
-                {
-                    readThread.Start();
-                    writeThread.Start();
-                }
-                catch
-                {
-                    Console.WriteLine("Error in 'Threads()' function: Could not start threads!");
-                }
+                readThread.Start();
+                writeThread.Start();
             }
-            if (control == 0)
+            catch
             {
-                try
-                {
-                    readThread.Join();
-                    writeThread.Join();
-                }
-                catch
-                {
-                    Console.WriteLine("Error in 'Threads()' function: Could not end threads!");
-                }
+                Console.WriteLine("Error in 'Threads()' function: Could not start threads!");
             }
         }
 
         static void End()
         {
             Console.WriteLine("Closing Program!");
+            readThread.Abort();
+            writeThread.Abort();
             SIOManager.Close();
+            STUtil.Pause(1000);
             Environment.Exit(0);
         }
 

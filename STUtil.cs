@@ -1,10 +1,16 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Text;
 
 namespace SerialTerminal
 {
-    public static class STUtil
+    public class STUtil
     {
+
+        public STUtil()
+        {
+            Console.WriteLine("STUtil Object");
+        }
 
         public static byte[] ToByteArray(string value)
         {
@@ -16,6 +22,12 @@ namespace SerialTerminal
                 bytes[i] = current;
             }
             return bytes;
+        }
+
+        public static char[] ToCharArray(string value)
+        {
+            char[] charArr = value.ToCharArray();
+            return charArr;
         }
 
         public static string ASCIIStrToHex(String asciiString)
@@ -38,6 +50,23 @@ namespace SerialTerminal
                 ascii += character;
             }
             return ascii;
+        }
+
+        public static void Pause(int milli)
+        {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            for (int i = 0; ; i++)
+            {
+                if (i % 100000 == 0)
+                {
+                    sw.Stop();
+                    if (sw.ElapsedMilliseconds >= milli)
+                        break;
+                    else
+                        sw.Start();
+                }
+            }
         }
     }
 }

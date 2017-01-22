@@ -12,12 +12,19 @@ namespace SerialTerminal
 
         public SIOManager()
         {
-            Console.WriteLine("SIOManager Object Created.");
+            Console.WriteLine("SIOManager Object");
         }
 
         public static void Close()
         {
-            port.Close();
+            try
+            {
+                port.Close();
+            }
+            catch
+            {
+                Console.WriteLine("Serial Port Was Not Open For Closing!");
+            }
         }
 
         public static void getSerialPortList()
@@ -27,14 +34,15 @@ namespace SerialTerminal
                 Console.Write(name);
                 Console.Write(" ");
             }
+            Console.WriteLine();
         }
 		
-		public static void SIOInit(string sioPort, int baud, int dataBits, int parity, int stopBits/*, SerialDataReceivedEventHandler callBack*/)
+		public static void SIOInit(string sioPort, int baud, int dataBits, int parity, int stopBits)
         {
             port = new SerialPort(sioPort);
             port.BaudRate = baud;
             port.DataBits = dataBits;
-            port.Encoding = Encoding.GetEncoding(28591);
+            //port.Encoding = Encoding.GetEncoding(28591);
             
             if (parity == 0)
                 port.Parity = Parity.None;
@@ -49,8 +57,6 @@ namespace SerialTerminal
                 port.StopBits = StopBits.One;
             else if (stopBits == 2)
                 port.StopBits = StopBits.Two;
-
-            //port.DataReceived += new SerialDataReceivedEventHandler(callBack);
 
             try
             {
@@ -67,7 +73,7 @@ namespace SerialTerminal
             port = new SerialPort(sioPort);
             port.BaudRate = baud;
             port.DataBits = dataBits;
-            port.Encoding = Encoding.GetEncoding(28591);
+            //port.Encoding = Encoding.GetEncoding(28591);
             
             if (parity == 0)
                 port.Parity = Parity.None;
