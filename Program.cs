@@ -1,19 +1,34 @@
 ﻿using System;
 using System.Text;
 using System.IO.Ports;
+using System.Threading;
 
 
 namespace SerialTerminal
 {
     class Program
     {
+        static bool continueToTransmit = false;
+        static string serPort, inputLine;
+        static int serBaud, TESTMODE;
+        static byte serDataBits, serParity, serStopBits;
+        static Thread readThread;
+        static Thread writeThread;
+
         static void Main(string[] args)
         {
-            string serPort, inputLine;
-            int serBaud;
-            byte serDataBits = 0, serParity = 0, serStopBits = 0;
-
-            int TESTMODE = 0;
+            
+            if (args.Length == 0)
+            {
+                TESTMODE = 0;
+            }
+            else if (args.Length > 0)
+            {
+                TESTMODE = Int32.Parse(args[0]);
+            }
+            
+            readThread = new Thread(Read);
+            writeThread = new Thread(Write);
 
             if (TESTMODE == 1)
             {
@@ -59,30 +74,32 @@ namespace SerialTerminal
                             {
                                 Console.WriteLine("");
                                 Console.WriteLine("Terminal Setup Completed.");
-                                Console.WriteLine("Commands: ");
-                                Console.WriteLine("   |   'quit'   |   'writeBytes'   |   ");
-                                Console.WriteLine("If the user does not pass a command into the terminal,");
-                                Console.WriteLine("the terminal assumes pass through mode, which means,");
-                                Console.WriteLine("any INPUT will be passed to the OUTPUT.");
-                                Console.WriteLine("");
+                                Motd();
                             }
                         }
                     }
                 }
+				
+                SIOManager.SIOInit(serPort, serBaud, serDataBits, serParity, serStopBits, port_DataReceived);
 
-                SIOManager.SIOInit(serPort, serBaud, serDataBits, serParity, serStopBits, string_DataReceived);
+                Update();
 
-                while (true)
+            }
+        }
+
+        static void Update()
+        {
+            while (true)
+            {
+                while (continueToTransmit == false)
                 {
                     inputLine = Console.ReadLine();
-
+                    
                     // Available Commands
                     switch (inputLine)
                     {
                         case "quit":
-                            Console.WriteLine("Closing Program!");
-                            SIOManager.Close();
-                            Environment.Exit(0);
+                            End();
                             break;
 
                         case "writeBytes":
@@ -91,23 +108,150 @@ namespace SerialTerminal
 
                             string byteStr = Console.ReadLine();
                             byte[] hexToByteA = STUtil.ToByteArray(byteStr);
-                            SIOManager.port.Write(hexToByteA, 0, hexToByteA.Length);
 
+                            SIOManager.port.Write(hexToByteA, 0, hexToByteA.Length);
+                            break;
+
+                        case "login":
+                            Console.WriteLine("Console over serial login for Linux or BSD.");
+
+                            SIOManager.SIOLogin();
+                            break;
+
+                        case "twoway":
+                            SIOManager.port.Close();
+                            Console.WriteLine("Closing Serial Port!");
+                            SIOManager.SIOInit(serPort, serBaud, serDataBits, serParity, serStopBits);
+                            Console.WriteLine("Reloading Last Serial Port in twoway mode!");
+
+                            continueToTransmit = true;
+                            Threads(1);
+                            Console.WriteLine("\t\tEntered TwoWay mode");
                             break;
 
                         // Passthrough 
                         default:
-                            SIOManager.port.Write(inputLine);
+                            SIOManager.port.WriteLine(inputLine);
                             break;
                     }
                 }
             }
         }
 
-        static void string_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        static void Motd()
         {
-            Console.WriteLine("Data Recieved:");
-            Console.WriteLine((sender as SerialPort).ReadExisting());
+            Console.WriteLine("Commands: ");
+            Console.WriteLine("|   'quit'   |   'writeBytes'   |   'login'   |   'twoway'   |");
+            Console.WriteLine("    If the user does not pass a command into the terminal ");
+            Console.WriteLine("    the terminal assumes pass through mode; which sends   ");
+            Console.WriteLine("    any INPUT over the serial port. In addition the       ");
+            Console.WriteLine("    program will return the input back to the console.    ");
+            Console.WriteLine("");
+        }
+
+        static void Read()
+        {
+            while (continueToTransmit)
+            {
+                try
+                {
+                    string message = SIOManager.port.ReadLine();
+                    Console.WriteLine(message);
+                }
+                catch
+                {
+                    Console.WriteLine("Error in 'Read()' Thread!");
+                }
+            }
+        }
+
+        static void Write()
+        {
+            while (continueToTransmit)
+            {
+                try
+                {
+                    string message = Console.ReadLine();
+
+                    switch (message)
+                    {
+                        case "return":
+                            continueToTransmit = false;
+                            SIOManager.port.Close();
+                            Console.WriteLine("Closing Serial Port!");
+                            SIOManager.SIOInit(serPort, serBaud, serDataBits, serParity, serStopBits, port_DataReceived);
+                            Console.WriteLine("Reloading Serial Port and Returning to Primary Mode!");
+                            Threads(0);
+                            Console.WriteLine("\t\tEntered Primary Mode");
+                            Console.WriteLine("");
+                            Motd();
+                            break;
+
+                        case "quit":
+                            End();
+                            break;
+
+                        default:
+                            SIOManager.port.WriteLine(message);
+                            SIOManager.port.WriteLine("");
+                            break;
+                    }  
+                }
+                catch
+                {
+                    Console.WriteLine("Error in 'Write()' Thread!");
+                }
+            }
+        }
+
+        static void Threads(int control)
+        {
+            if (control == 1)
+            {
+                try
+                {
+                    readThread.Start();
+                    writeThread.Start();
+                }
+                catch
+                {
+                    Console.WriteLine("Error in 'Threads()' function: Could not start threads!");
+                }
+            }
+            if (control == 0)
+            {
+                try
+                {
+                    readThread.Join();
+                    writeThread.Join();
+                }
+                catch
+                {
+                    Console.WriteLine("Error in 'Threads()' function: Could not end threads!");
+                }
+            }
+        }
+
+        static void End()
+        {
+            Console.WriteLine("Closing Program!");
+            SIOManager.Close();
+            Environment.Exit(0);
+        }
+
+        // This Callback returns the same value placed into the serial terminal
+        static void port_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        {
+            try
+            {
+                SerialPort sp = (SerialPort)sender;
+                string indata = sp.ReadExisting();
+                Console.WriteLine(indata);
+            }
+            catch
+            {
+                Console.WriteLine("Error in 'port_DataReceived()' function!");
+            }
         }
     }
 }
